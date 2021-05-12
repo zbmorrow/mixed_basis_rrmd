@@ -4,6 +4,7 @@ This GitHub repository implements the methods outlined in the paper by Morrow, K
 
 ### Requirements
 - [Tasmanian](https://tasmanian.ornl.gov/), verified with v7.1
+    - Must be added to `PYTHONPATH` post-install, via `export PYTHONPATH=<path-to-Tasmanian>/share/Tasmanian/python:$PYTHONPATH`
 - NumPy
 - SciPy
 
