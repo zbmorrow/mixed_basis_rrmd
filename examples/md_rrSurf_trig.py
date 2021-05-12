@@ -81,6 +81,11 @@ sg_trig_geom = tsg.SparseGrid()
 sg_trig_geom.makeFourierGrid(3,N_poly*N_atom*3,5,'iptotal',[1, 2, 2])
 sg_trig_geom.setDomainTransform(np.asarray([[0, 1], [0,1], [0, 1]]))
 
+# each row of geomcart.dat is formatted like 
+#
+#    X_1^{poly node 1}, ..., X_{30}^{poly node 1}, ..., X_1^{poly node N_poly}, ..., X_{30}^{poly node N_poly}
+#
+# where the row index corresponds to the trig node index
 dataG = np.loadtxt('%s/geomcart.dat' % state_folder,delimiter=',')
 sg_trig_geom.loadNeededPoints(dataG)
 
