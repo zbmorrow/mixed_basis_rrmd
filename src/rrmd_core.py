@@ -202,9 +202,8 @@ def surfMD(Q0, P0, inpRec, chkDir, chkFreq):
     for i in range(istart, maxStep):
         k = 0
         failed = True
-        outBounds = False
         forceNewton = True
-        while k < 3 and (failed or outBounds):
+        while k < 3 and failed:
             if inpRec['method'].lower() == 'nve':
                 (Qt, Pt, scipyDefaultSolver) = propagator_stormer_verlet_uni(Q0, P0, inpRec, mdHdQfun_NVE, dHdPfun_NVE, scipyDefaultSolver, forceNewton)
             elif inpRec['method'].lower() == 'langevin':
@@ -227,25 +226,25 @@ def surfMD(Q0, P0, inpRec, chkDir, chkFreq):
                     Q0[idx] = 2*Qpred[1][idx] - Qpred[0][idx]
                 continue
 
-            outBounds = np.logical_or(Qt[N_per:] < 0.0, Qt[N_per:] > 1.0).any()
-            if outBounds:
-                print(i,'Reassigning momenta')
-                # if the nonperiodic variables are out of bounds, reflect momentum (diagonalized basis) for all assoc variables
-                outinds = np.argwhere(np.logical_or(Qt[N_per:] < 0, Qt[N_per:] > 1))+N_per
-                (V,D) = np.linalg.svd(GQ(Q0), hermitian=True)[:2]
-                dQdt = np.linalg.solve(GQ(Q0), P0)
-                u = np.matmul(V.T, P0)
-                Veff = np.matmul(V,np.diag(1/D))
-                for m in outinds:
-                    # find influential eigenvectors for relevant Q_m (whose time derivative needs to switch)
-                    # traverse u and negate until we get the right sign on dq_m/dt
-                    ordered_inds_m = np.flip(np.argsort(np.abs(Veff[m,:]))).flatten()
-                    j = 0
-                    while np.sign(np.dot(Veff[m,:], u)) == np.sign(dQdt[m]):
-                        u[ordered_inds_m[j]] = -u[ordered_inds_m[j]]
-                        j += 1
-                P0 = np.matmul(V,u)
-                k += 1
+            # outBounds = np.logical_or(Qt[N_per:] < 0.0, Qt[N_per:] > 1.0).any()
+            # if outBounds:
+            #     print(i,'Reassigning momenta')
+            #     # if the nonperiodic variables are out of bounds, reflect momentum (diagonalized basis) for all assoc variables
+            #     outinds = np.argwhere(np.logical_or(Qt[N_per:] < 0, Qt[N_per:] > 1))+N_per
+            #     (V,D) = np.linalg.svd(GQ(Q0), hermitian=True)[:2]
+            #     dQdt = np.linalg.solve(GQ(Q0), P0)
+            #     u = np.matmul(V.T, P0)
+            #     Veff = np.matmul(V,np.diag(1/D))
+            #     for m in outinds:
+            #         # find influential eigenvectors for relevant Q_m (whose time derivative needs to switch)
+            #         # traverse u and negate until we get the right sign on dq_m/dt
+            #         ordered_inds_m = np.flip(np.argsort(np.abs(Veff[m,:]))).flatten()
+            #         j = 0
+            #         while np.sign(np.dot(Veff[m,:], u)) == np.sign(dQdt[m]):
+            #             u[ordered_inds_m[j]] = -u[ordered_inds_m[j]]
+            #             j += 1
+            #     P0 = np.matmul(V,u)
+            #     k += 1
 
         if failed:
             print(i,': optimizer not converged')
