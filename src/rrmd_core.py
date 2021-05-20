@@ -1,14 +1,41 @@
 import numpy as np
 from rrmd_math_utils import *
 import os
-import multiprocessing
-import functools
 
 def mass_metric(q, drdq, M):
+    '''
+    G = mass_metric(q, drdq, M)
+
+    Computes mass-metric tensor at point q
+        G_{ij} = \sum_{k=1}^{3*Natom} m_k \frac{\partial X_k (q)}
+                    {\partial q_i} \frac{\partial X_k (q)}{\partial q_j}
+
+    Inputs:
+        q:      (length-d arraylike) evaluation point
+        drdq:   function handle that returns X'(q)
+        M:      (length-3*Natom arraylike) atomic masses
+
+    Outputs:
+        G:      (d-by-d array) mass-metric tensor
+    '''
     drdqmat = drdq(q)
     return np.matmul(drdqmat.T, np.matmul(np.diag(M),drdqmat))
 
 def mdhdqfun_uni(q, p, dUdQ, GQ):
+    '''
+    mdHdQ = mdhdqfun_uni(q, p, dUdQ, GQ)
+
+    Computes -\frac{\partial \mathcal{H}}{\partial \bm q}
+
+    Inputs:
+        q:      (length-d arraylike) design variable
+        p:      (length-d arraylike) generalized momentum
+        dUdQ:   function handle for U'(q)
+        GQ:     function handle to compute mass-metric tensor G(q)
+
+    Outputs:
+        mdHdQ:  (length-d arraylike)
+    '''
     p = np.reshape(p, (p.size,1))
     q = np.reshape(q, (1,q.size))
     dUdQarray = dUdQ(q)
@@ -19,16 +46,55 @@ def mdhdqfun_uni(q, p, dUdQ, GQ):
     return np.reshape(mdHdQ,(p.size,))
 
 def dhdpfun_uni(q, p, GQ):
+    '''
+    dHdP = dhdpfun_uni(q, p, GQ)
+
+    Computes \frac{\partial \mathcal{H}}{\partial \bm p}
+
+    Inputs:
+        q:      (length-d arraylike) design variable
+        p:      (length-d arraylike) generalized momentum
+        GQ:     function handle to compute mass-metric tensor G(q)
+
+    Outputs:
+        dHdP:   (length-d arraylike)
+    '''
     q = np.reshape(q, (1,q.size))
     p = np.reshape(p, (p.size,1))
     return np.reshape(np.linalg.solve(GQ(q),p),(p.size,))
 
 def ke_uni(q, p, GQ):
+    '''
+    K = ke_uni(q, p, GQ)
+
+    Computes kinetic energy K(q,p) = 0.5 * p^T G(q)^{-1} p
+
+    Inputs:
+        q:      (length-d arraylike) design variable
+        p:      (length-d arraylike) generalized momentum
+        GQ:     function handle to compute mass-metric tensor G(q)
+
+    Outputs:
+        K:      (float) kinetic energy
+    '''
     p = np.reshape(p,(p.size,1));
     q = np.reshape(q,(1,q.size));
     return 0.5 * np.dot(p.T, np.linalg.solve(GQ(q),p)).item()
 
 def init_velocity(M, T):
+    '''
+    V = init_velocity(M, T)
+
+    Computes initial velocity [angstrom/fs] from Boltzmann distribution
+    at temp T
+
+    Inputs:
+        M:  (length-3*Natom arraylike) atomic masses
+        T:  (float) temperature
+
+    Outputs:
+        V:  (length-3*Natom arraylike) velocities
+    '''
     # use kB with units [amu * angstrom^2 * fs^(-2) * K^(-1)]
     kB = 8.31446e-7
     velocity = np.random.normal(0,1,M.shape);
@@ -36,11 +102,41 @@ def init_velocity(M, T):
     return np.multiply(scaler, velocity);
 
 def v2p(V, M, Q, drdq):
+    '''
+    P = v2p(V, M, Q, drdq)
+
+    Projects velocity onto momentum by P = X'(Q)V
+
+    Inputs:
+        V:      (length-3*Natom arraylike) velocities
+        M:      (length-3*Natom arraylike) atomic masses
+        Q:      (length-d arraylike) design variables
+        drdq:   function handle for X'(q)
+
+    Outputs:
+        P:      (length-d arraylike) generalized momentum
+    '''
     carP = np.reshape(np.multiply(V,M), (1,V.size))
     drdqmat = drdq(Q)
     return np.reshape(np.dot(carP, drdqmat), Q.shape)
 
 def prep_P0(Q0, inpRec, V0=None):
+    '''
+    (P0, V0) = prep_P0(Q0, inpRec, V0=None)
+
+    Generates initial momentum
+
+    Inputs:
+        Q0:     (length-d arraylike) initial design variables
+        inpRec: (dict) structure containing simulation parameters
+        V0:     (length-3*Natom, optional, default None) initial
+                    velocity; necessary when restarting
+
+    Outputs:
+        P0:     (length-d arraylike) initial momentum
+        V0:     (length-3*Natom) initial velocity; necessary when not
+                    restarting so that we can checkpoint
+    '''
     Temp = inpRec['Temp']
     M = inpRec['M']
     if type(V0) == type(None):
@@ -49,37 +145,59 @@ def prep_P0(Q0, inpRec, V0=None):
     P0 = np.reshape(P0, P0.size)
     return (P0,V0)
 
-def p2v(Q, P, inpRec, dHdPfun):
-    dt = 0.001
-    dQdt = dHdPfun(Q,P)
-    Qmdt = Q - dt*dQdt
-    Qpdt = Q + dt*dQdt
-    Xmdt = inpRec['XQ'](Qmdt)
-    Xpdt = inpRec['XQ'](Qpdt)
-    v1d = (Xpdt - Xmdt) / (2*dt)
-    v1d = np.reshape(v1d, inpRec['M'].shape)
-    return v1d
+def langevin_o_step(Q, P, inpRec):
+    '''
+    Pnew = langevin_o_step(Q, P, inpRec)
 
-def p2v_thermo(Q, P, inpRec, dHdPfun):
-    v_direct = p2v(Q,P, inpRec, dHdPfun)
-    v1d_reassign = init_velocity(inpRec['M'], inpRec['Temp'])
-    p_interest = v2p(v1d_reassign, inpRec['M'], Q, inpRec['dXdQ'])
-    v1d_interest = p2v(Q, p_interest, inpRec, dHdPfun)
-    return v_direct + v1d_reassign - v1d_interest
+    Computes coupling of system with thermal bath (Langevin O-step)
 
-def langevin_o_step(Q, P, inpRec, dHdPfun):
-    v1d = p2v_thermo(Q, P, inpRec, dHdPfun)
-    cartP = np.multiply(v1d, inpRec['M'])
+    Inputs:
+        Q:      (length-d arraylike) design variables
+        P:      (length-d arraylike) momentum
+        inpRec: (dict) structure containing simulation parameters
+
+    Outputs:
+        Pnew:   (length-d arraylike) momentum with thermal effects
+    '''
     # use kB with units [amu * angstrom^2 * fs^(-2) * K^(-1)]
     kB = 8.31446e-7
-    cartPnew = np.exp(-inpRec['Gamma'] * inpRec['dt']) * cartP + np.sqrt(1-np.exp(-2*inpRec['Gamma']*inpRec['dt'])) \
-                * np.multiply(np.sqrt(inpRec['M'] * kB * inpRec['Temp']), np.random.normal(0,1,inpRec['M'].shape))
+    Pnew = np.exp(-inpRec['Gamma'] * inpRec['dt']) * P + np.sqrt(1-np.exp(-2*inpRec['Gamma']*inpRec['dt'])) \
+                * np.dot(inpRec['dXdQ'](Q).T, np.multiply(np.sqrt(inpRec['M'] * kB * inpRec['Temp']), np.random.normal(0,1,inpRec['M'].shape)))
 
-    cartPnew = np.reshape(cartPnew, (1, cartPnew.size))
-    Pnew = np.dot(cartPnew, inpRec['dXdQ'](Q))
     return np.reshape(Pnew, P.shape)
 
 def propagator_stormer_verlet_uni(Q0, P0, inpRec, mdHdQfun, dHdPfun, scipyDefaultSolver='hybr', forceNewton=True):
+    '''
+    (Qt, Pt, scipyDefaultSolver) = propagator_stormer_verlet_uni(Q0, P0,
+            inpRec, mdHdQfun, dHdPfun, scipyDefaultSolver='hybr',
+            forceNewton=True)
+
+    Stormer-Verlet integration scheme. Uses Newton for the implicit
+    step, unless forceNewton == False and a periodic design variable is
+    near the periodic boundary, in which case it uses a derivative-free
+    solver in SciPy.
+
+    Inputs:
+        Q0:         (length-d arraylike) design variables at t_n
+        P0:         (length-d arraylike) momenta at t_n
+        mdHdQfun:   function handle for
+                        -\frac{\partial \mathcal{H}(q,p)}{\partial q}
+        dHdPfun:    function handle for
+                        \frac{\partial \mathcal{H}(q,p)}{\partial p}
+        scipyDefaultSolver:
+                    (str, default 'hybr') default solver for SciPy to
+                    use. Only acceptable values are 'hybr' or 'df-sane'
+        forceNewton:
+                    (bool, default True) whether to force the program to
+                    use Newton's method
+
+    Outputs:
+        Qt:         (length-d arraylike) design variables at t_{n+1}
+        Pt:         (length-d arraylike) momenta at t_{n+1}
+        scipyDefaultSolver:
+                    (str) encodes any change in the name of successful
+                    SciPy solver, for use with all-polynomial basis only
+    '''
     dof = P0.size
     Q0 = np.reshape(Q0, (dof,))
     P0 = np.reshape(P0, (dof,))
@@ -129,6 +247,25 @@ def propagator_stormer_verlet_uni(Q0, P0, inpRec, mdHdQfun, dHdPfun, scipyDefaul
     return (Qt, Pt, scipyDefaultSolver)
 
 def propagator_baoab_langevin(Q0, P0, inpRec, mdHdQfun, dHdPfun):
+    '''
+    (Qt, Pt) = propagator_baoab_langevin(Q0, P0, inpRec, mdHdQfun,
+                    dHdPfun)
+
+    BAOAB integration method for Langevin equations
+
+    Inputs:
+        Q0:         (length-d arraylike) design variables at t_n
+        P0:         (length-d arraylike) momenta at t_n
+        inpRec:     (dict) structure containing simulation parameters
+        mdHdQfun:   function handle for
+                        -\frac{\partial \mathcal{H}(q,p)}{\partial q}
+        dHdPfun:    function handle for
+                        \frac{\partial \mathcal{H}(q,p)}{\partial p}
+
+    Outputs:
+        Qt:         design variables at t_{n+1}
+        Pt:         momenta at t_{n+1}
+    '''
     dof = P0.size
     Q0 = np.reshape(Q0, (dof,))
     P0 = np.reshape(P0, (dof,))
@@ -145,7 +282,7 @@ def propagator_baoab_langevin(Q0, P0, inpRec, mdHdQfun, dHdPfun):
     Q_half = Q0 + 0.5 * dt * dHdPfun(Q0,P_half)
 
     # do the O-step
-    P_half_true = langevin_o_step(Q_half, P_half, inpRec, dHdPfun)
+    P_half_true = langevin_o_step(Q_half, P_half, inpRec)
 
     # AB
     fq = lambda Q : Q_half + 0.5 * dt * dHdPfun(Q,P_half_true) - Q
@@ -159,13 +296,36 @@ def propagator_baoab_langevin(Q0, P0, inpRec, mdHdQfun, dHdPfun):
 
 
 def surfMD(Q0, P0, inpRec, chkDir, chkFreq):
+    '''
+    surfMD(Q0, P0, inpRec, chkDir, chkFreq):
+
+    Wrapper for NVE and Langevin MD on reduced-dimensional surrogate PES
+
+    Inputs:
+        Q0:         (length-d arraylike) initial design variables
+        P0:         (length-d arraylike) initial momenta
+        inpRec:     (dict) structure containing simulation parameters
+        chkDir:     (str) checkpoint directory
+        chkFreq:    (int) save outputs every chkFreq steps
+
+    Fields of inpRec:
+        restart:    (bool) whether to restart from saved trajectory
+        method:     (str) 'NVE' or 'Langevin'
+        N_per:      (int) number of periodic design variables
+        M:          (length-3*Natom arraylike) atomic masses
+        Temp:       (float) initial (NVE) or target (Langevin) temp
+        dt:         (float) time step
+        Tfinal:     (float) integrate up to time t = Tfinal
+        bounds:     (d-by-2 arraylike) bounds for physical domain
+        Gamma:      friction coefficient for Langevin equations
+    '''
     GQ = lambda Q : mass_metric(Q, inpRec['dXdQ'], inpRec['M'])
     mdHdQfun_NVE = lambda Q,P : mdhdqfun_uni(Q, P, inpRec['dUdQ'], GQ)
     dHdPfun_NVE = lambda Q,P: dhdpfun_uni(Q, P, GQ)
-    maxStep = inpRec['maxStep']
+    maxStep = int(inpRec['Tfinal'] / inpRec['dt'] + 1)
 
     if not inpRec['restart']:
-        Qlist = [] 
+        Qlist = []
         Plist = []
         KElist = []
         UQlist = []
@@ -226,26 +386,6 @@ def surfMD(Q0, P0, inpRec, chkDir, chkFreq):
                     Q0[idx] = 2*Qpred[1][idx] - Qpred[0][idx]
                 continue
 
-            # outBounds = np.logical_or(Qt[N_per:] < 0.0, Qt[N_per:] > 1.0).any()
-            # if outBounds:
-            #     print(i,'Reassigning momenta')
-            #     # if the nonperiodic variables are out of bounds, reflect momentum (diagonalized basis) for all assoc variables
-            #     outinds = np.argwhere(np.logical_or(Qt[N_per:] < 0, Qt[N_per:] > 1))+N_per
-            #     (V,D) = np.linalg.svd(GQ(Q0), hermitian=True)[:2]
-            #     dQdt = np.linalg.solve(GQ(Q0), P0)
-            #     u = np.matmul(V.T, P0)
-            #     Veff = np.matmul(V,np.diag(1/D))
-            #     for m in outinds:
-            #         # find influential eigenvectors for relevant Q_m (whose time derivative needs to switch)
-            #         # traverse u and negate until we get the right sign on dq_m/dt
-            #         ordered_inds_m = np.flip(np.argsort(np.abs(Veff[m,:]))).flatten()
-            #         j = 0
-            #         while np.sign(np.dot(Veff[m,:], u)) == np.sign(dQdt[m]):
-            #             u[ordered_inds_m[j]] = -u[ordered_inds_m[j]]
-            #             j += 1
-            #     P0 = np.matmul(V,u)
-            #     k += 1
-
         if failed:
             print(i,': optimizer not converged')
             saveResults()
@@ -266,7 +406,7 @@ def surfMD(Q0, P0, inpRec, chkDir, chkFreq):
         Ppred.pop(0)
         Qpred.append(Qt)
         Ppred.append(Pt)
-        Q0 = Qt 
+        Q0 = Qt
         P0 = Pt
         if i % chkFreq == 0:
             saveResults()

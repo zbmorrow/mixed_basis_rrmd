@@ -46,8 +46,7 @@ inpRec['N_per'] = 3
 inpRec['M'] = np.reshape(M,(M.size,))   # units = amu
 inpRec['Temp'] = Temp                   # units = K
 inpRec['dt'] = 0.05                     # units = fs
-inpRec['Tfinal'] = 4.0              # units = fs
-inpRec['maxStep'] = int(inpRec['Tfinal'] / inpRec['dt'] + 1)
+inpRec['Tfinal'] = 40000.0              # units = fs
 # need bounds since domains must be on same scale within the MD simulator
 inpRec['bounds'] = [[-180,180], [-180,180], [-180,180], [1.1, 2.5], [90, 270]]  # units = GIC
 inpRec['Gamma'] = 0.01                  # units = fs^(-1)

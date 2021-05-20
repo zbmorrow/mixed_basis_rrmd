@@ -1,21 +1,62 @@
 import numpy as np
-import functools
 import scipy.optimize
 
 def pbcfun(x, n):
-    # Apply periodicity to inputs of polynomial interpolant manually
+    '''
+    z = pbcfun(x, n)
+
+    Apply periodicity to inputs of polynomial interpolant manually
+
+    Inputs:
+        x:      (length-d array-like) point
+        n:      (int) number of periodic variables
+
+    Outputs:
+        y:      (length-d array-like) point in interval [0,1]
+    '''
     z = np.copy(x)
     z = np.reshape(z, (z.size,))
     z[:n] = z[:n] - np.floor(z[:n])
     return z
 
 def to_canonical(q, bounds):
+    '''
+    y = to_canonical(q, bounds)
+
+    Convert q from physical domain to canonical interval spacing (but
+    allow for periodic extensions)
+
+    Inputs:
+        q:          (length-d array-like) point in physical domain
+        bounds:     (d-by-2 array-like) endpoints for physical domain
+                        intervals
+
+    Outputs:
+        y:          (length-d array-like) point in extended canonical
+                        domain
+    '''
     q = np.asarray(q)
     q = np.reshape(q,(q.size,))
     bounds = np.asarray(bounds)
     return np.divide(q - bounds[:,0], bounds[:,1]-bounds[:,0])
 
 def from_canonical(q, bounds):
+    '''
+    y = to_canonical(q, bounds)
+
+    Convert q from canonical interval spacing to physical domain
+    (allowing for periodic extensions)
+
+    Inputs:
+        q:          (length-d array-like) point in extended canonical
+                        domain
+        bounds:     (d-by-2 array-like) endpoints for physical domain
+                        intervals
+
+    Outputs:
+        y:          (length-d array-like) point in extended physical
+                        domain
+    '''
     q = np.asarray(q)
     q = np.reshape(q,(q.size,))
     bounds = np.asarray(bounds)
@@ -25,17 +66,18 @@ def eval_mixed(x, sg_trig, sg_poly, ndof=1):
     '''
     f = eval_mixed(sg_trig, sg_poly, x, ndof)
 
-    Evaluates an interpolant constructed by both trigonometric and polynomial
-    basis functions.
+    Evaluates a mixed interpolant constructed by both trigonometric and
+    polynomial basis functions.
 
     INPUTS:
-      sg_trig, sg_poly:   Tasmanian structures, from grid.make*** command
-      x:                  nx-by-d array of evaluation points
-      ndof:               number of output dimensions of interpolant, changes
-                          between geom vs energy surrogate models
+      sg_trig, sg_poly:
+                Tasmanian structures, from grid.make*** command
+      x:        (nx-by-d array) evaluation points
+      ndof:     (int) number of output dimensions of interpolant,
+                    changes between geom vs energy surrogate models
 
     OUTPUTS:
-      f:                  evaluations of interpolant, size nx-by-ndof
+      f:        (nx-by-ndof array) evaluations of interpolant
     '''
 
     # first, if x is 1d array, pad into 2d array
@@ -65,19 +107,20 @@ def eval_mixed(x, sg_trig, sg_poly, ndof=1):
 
 def eval_mixed_grad(x, sg_trig, sg_poly, ndof=1):
     '''
-    f = eval_mixed(x, sg_trig, sg_poly, ndof)
+    f = eval_mixed_grad(x, sg_trig, sg_poly, ndof)
 
-    Evaluates an interpolant constructed by both trigonometric and polynomial
-    basis functions.
+    Evaluates a mixed interpolant gradient constructed by both
+    trigonometric and polynomial basis functions.
 
     INPUTS:
-      sg_trig, sg_poly:   Tasmanian structures, from grid.make*** command
-      x:                  1-by-d array of evaluation points
-      ndof:               number of output dimensions of interpolant, changes
-                          between geom vs energy surrogate models
+      sg_trig, sg_poly:
+                Tasmanian structures, from grid.make*** command
+      x:        (length-d arraylike) evaluation points
+      ndof:     (int) number of output dimensions of interpolant,
+                    changes between geom vs energy surrogate models
 
     OUTPUTS:
-      f:                  evaluations of interpolant, size ndof-by-d
+      f:        (ndof-by-d array) Jacobian of interpolant
     '''
     h = 1e-6
     d = x.size
@@ -95,6 +138,18 @@ def eval_mixed_grad(x, sg_trig, sg_poly, ndof=1):
     return grad
 
 def eval_grad(x, sg):
+    '''
+    f = eval_grad(x, sg)
+
+    Evaluates gradient of single-basis interpolant
+
+    Inputs:
+        x:      (length-d arraylike) evaluation point
+        sg:     Tasmanian structure, from grid.make*** command
+
+    Outputs:
+        f:      (ndof-by-d array) Jacobian of interpolant
+    '''
     h = 1e-6
     d = sg.getNumDimensions()
     I = np.eye(d)
@@ -110,7 +165,41 @@ def eval_grad(x, sg):
     return grad
 
 def nsold(x0, f, tol=[1e-5, 1e-5], maxit=5, doArmijo=True):
-    # Direct Newton solver with Armijo line search and 3-point parabolic predictor
+    '''
+    (xstar, ithist, armijofail) = nsold(x0, f, tol=[1e-5, 1e-5],
+                                    maxit=5, doArmijo=True)
+
+    Direct Newton solver with Armijo line search and 3-point parabolic
+    predictor. Based on Matlab codes by C. T. Kelley
+    (https://ctk.math.ncsu.edu/newton/SOLVERS/nsold.m)
+
+    Inputs:
+        x0:         (length-d arraylike) initial iterate
+        f:          function
+        tol:        (length-2 list) absolute and relative tolerances
+        maxit:      (int, default 5) maximum number of iterations
+        doArmijo:   (bool, default True) whether to do Armijo reductions
+
+    Outputs:
+        xstar:      (length-d arraylike) root of f
+        ithist:     (list) ithist[n] = norm(f(x_n), 2)
+        armijofail: (bool) success/failure of Armijo reduction
+    '''
+
+    def parab3p(lambdac, lambdam, ff0, ffc, ffm):
+        # Translated into Python, based on original Matlab code by C. T. Kelley
+        # (https://ctk.math.ncsu.edu/newton/SOLVERS/nsold.m)
+        sigma0 = .1
+        sigma1 = .5
+        c2 = lambdam*(ffc-ff0)-lambdac*(ffm-ff0)
+        if c2 >= 0:
+            return sigma1*lambdac
+
+        c1 = lambdac*lambdac*(ffm-ff0)-lambdam*lambdam*(ffc-ff0)
+        lambdap = -c1 * 0.5/c2
+        lambdap = sigma0*lambdac if lambdap < sigma0*lambdac else sigma1*lambdac
+        return lambdap
+
     d = x0.size
     x = np.reshape(x0,(1,d))
     itc = 0
@@ -166,28 +255,44 @@ def nsold(x0, f, tol=[1e-5, 1e-5], maxit=5, doArmijo=True):
 
     return (np.reshape(x,x0.shape), ithist, armijofail)
 
-def parab3p(lambdac, lambdam, ff0, ffc, ffm):
-    # Translated into Python, based on original Matlab code by C. T. Kelley
-    # (https://ctk.math.ncsu.edu/newton/SOLVERS/nsold.m)
-    sigma0 = .1
-    sigma1 = .5
-    c2 = lambdam*(ffc-ff0)-lambdac*(ffm-ff0)
-    if c2 >= 0:
-        return sigma1*lambdac
+def dirder(i, f, x, f0=None, h=1e-6):
+    '''
+    g = dirder(i, f, x, f0=None, h=1e-6)
 
-    c1 = lambdac*lambdac*(ffm-ff0)-lambdam*lambdam*(ffc-ff0)
-    lambdap = -c1 * 0.5/c2
-    lambdap = sigma0*lambdac if lambdap < sigma0*lambdac else sigma1*lambdac
-    return lambdap
+    Find \frac{\partial f}{\partial x_i} evaluated at x
 
-def dirder(dim, f, x, f0=None, h=1e-6):
+    Inputs:
+        i:      (int) gradient direction
+        f:      function
+        x:      (length-d arraylike) evaluation point
+        f0:     (length-ndof arraylike, optional) value of f(x)
+        h:      (float, default 1e-6) difference increment
+
+    Output:
+        g:      (length-ndof arraylike) gradient
+    '''
     ei = np.zeros((x.size,))
-    ei[dim] = 1
+    ei[i] = 1
     if type(f0) == type(None):
         f0 = f(x)
     return (f(x+h*ei) - f0) / h
 
 def scipy_root_wrapper(x0, f, method='hybr'):
+    '''
+    xstar = scipy_root_wrapper(x0, f, method='hybr')
+
+    Function of convenience. Used when solving the implicit equation
+    near the periodic boundary in Stormer-Verlet integration with a
+    polynomial surrogate
+
+    Inputs:
+        x0:     (length-d arraylike) initial iterate
+        f:      function
+        method: (str, default 'hybr') SciPy solver to use
+
+    Outputs:
+        xstar:  (length-d arraylike) root
+    '''
     sol = scipy.optimize.root(f, x0, tol=1e-9, method=method)
     if not sol.success and np.linalg.norm(sol.fun,2) > 5e-6:
         print(sol.message)
