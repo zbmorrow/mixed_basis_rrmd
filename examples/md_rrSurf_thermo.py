@@ -20,7 +20,7 @@ else:
 print('Run index:\t',Nrun)
 print('Temp:\t\t',Temp,'K')
 
-chkDir = 'rrmd_langevin_trig_triplet_torsion'
+chkDir = 'rrmd_langevin_trig_trans'
 if not os.path.exists(chkDir):
     os.mkdir(chkDir)
 
@@ -30,7 +30,7 @@ if not os.path.exists(chkDir):
 
 
 # read atomic masses
-state_folder = 'matfiles_iptotal_5_iptotal_8_triplet'
+state_folder = 'matfiles_iptotal_5_iptotal_8'
 M = pandas.read_csv('%s/atom.dat' % state_folder, sep='[A-z][a-z]?', header=None, engine='python').values[:,1]
 M = np.array([M]).T
 N_atom = len(M)
@@ -92,11 +92,9 @@ inpRec['dXdQ'] = lambda Q : eval_mixed_grad(Q, sg_trig=sg_trig_geom, sg_poly=sg_
 
 # get initial position, velocity, and momentum
 if not inpRec['restart']:
-    # initialize Q0 at trans min on singlet PES
-    Q0_guess = to_canonical([-96.26, 127.57, 68.63, 1.48, 128.24],inpRec['bounds'])
-    # # initialize to torsion minimum on triplet PES
-    # Q0_guess = to_canonical([-96.26, 127.57, 68.63, 1.48, 128.24], inpRec['bounds'])
-    (Q0,ithist,armfail) = nsold(Q0_guess, inpRec['dUdQ'], [1e-3, 1e-3], 50, True)
+    # start at trans min on S0 surface
+    Q0_guess = to_canonical([-179.71, 121.91, 121.84, 1.46, 116.06],inpRec['bounds'])
+    (Q0,ithist,armfail) = nsold(Q0_guess, inpRec['dUdQ'], [1e-5, 1e-5], 50, True)
     try:
         V0 = np.loadtxt(os.path.join(chkDir, 'V0.txt'))
         (P0, V0) = prep_P0(Q0, inpRec, V0)

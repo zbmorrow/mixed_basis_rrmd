@@ -93,7 +93,7 @@ inpRec['dXdQ'] = lambda Q : eval_mixed_grad(Q, sg_trig=sg_trig_geom, sg_poly=sg_
 
 # get initial position, velocity, and momentum
 if not inpRec['restart']:
-    # start near, but not at, trans min on singlet surface
+    # start at trans min on S0 surface
     Q0_guess = to_canonical([-179.71, 121.91, 121.84, 1.46, 116.06],inpRec['bounds'])
     (Q0,ithist,armfail) = nsold(Q0_guess, inpRec['dUdQ'], [1e-5, 1e-5], 50, True)
     try:

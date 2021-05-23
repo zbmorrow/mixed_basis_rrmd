@@ -79,7 +79,7 @@ inpRec['XQ'] = lambda Q: sg_geom.evaluate(pbcfun(Q, inpRec['N_per']))
 inpRec['dXdQ'] = lambda Q: eval_grad(pbcfun(Q, inpRec['N_per']), sg=sg_geom)
 
 if not inpRec['restart']:
-    # initialize Q0 near, but not at, trans minimum on singlet PES
+    # start at trans min on S0 surface 
     Q0_guess = to_canonical([180.00, 138.85, -131.10, 1.47, 113.39], inpRec['bounds'])
     if (np.any(np.abs(pbcfun(Q0_guess, inpRec['N_per'])[:3]) < 6e-3) or np.any(np.abs(pbcfun(Q0_guess, inpRec['N_per'])[:3] - 1.0) < 6e-3)):
         Q0 = scipy.optimize.root(inpRec['dUdQ'], Q0_guess, tol=1e-5, method='hybr').x
