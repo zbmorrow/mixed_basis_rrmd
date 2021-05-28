@@ -64,7 +64,7 @@ def from_canonical(q, bounds):
 
 def eval_mixed(x, sg_trig, sg_poly, ndof=1):
     '''
-    f = eval_mixed(sg_trig, sg_poly, x, ndof)
+    f = eval_mixed(sg_trig, sg_poly, x, ndof=1)
 
     Evaluates a mixed interpolant constructed by both trigonometric and
     polynomial basis functions.
@@ -107,7 +107,7 @@ def eval_mixed(x, sg_trig, sg_poly, ndof=1):
 
 def eval_mixed_grad(x, sg_trig, sg_poly, ndof=1):
     '''
-    f = eval_mixed_grad(x, sg_trig, sg_poly, ndof)
+    f = eval_mixed_grad(x, sg_trig, sg_poly, ndof=1)
 
     Evaluates a mixed interpolant gradient constructed by both
     trigonometric and polynomial basis functions.
@@ -187,8 +187,10 @@ def nsold(x0, f, tol=[1e-5, 1e-5], maxit=5, doArmijo=True):
     '''
 
     def parab3p(lambdac, lambdam, ff0, ffc, ffm):
-        # Translated into Python, based on original Matlab code by C. T. Kelley
-        # (https://ctk.math.ncsu.edu/newton/SOLVERS/nsold.m)
+        '''
+        Translated into Python, based on original Matlab code by C. T. Kelley
+        (https://ctk.math.ncsu.edu/newton/SOLVERS/nsold.m)
+        '''
         sigma0 = .1
         sigma1 = .5
         c2 = lambdam*(ffc-ff0)-lambdac*(ffm-ff0)
