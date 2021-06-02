@@ -9,18 +9,29 @@ from rrmd_core import *
 import scipy.optimize
 
 
-if len(sys.argv) > 2:
-    Nrun = float(sys.argv[1])
+if len(sys.argv) > 3:
+    Nrun = int(sys.argv[1])
     Temp = float(sys.argv[2])
+    Tfinal = float(sys.argv[3])
+elif len(sys.argv) > 2:
+    print('md_rrSurf_poly.py [Nrun=1] [Temp=298.15] [Tfinal=2500.0]')
+    Nrun = int(sys.argv[1])
+    Temp = float(sys.argv[2])
+    Tfinal = 2500.0
 elif len(sys.argv) > 1:
-    Nrun = float(sys.argv[1])
-    Temp = 298.15
+    print('md_rrSurf_poly.py [Nrun=1] [Temp=298.15] [Tfinal=2500.0]')
+    Nrun = int(sys.argv[1])
+    Temp = 298.15 
+    Tfinal = 2500.0
 else:
+    print('md_rrSurf_poly.py [Nrun=1] [Temp=298.15] [Tfinal=2500.0]')
     Nrun = 1
     Temp = 298.15
+    Tfinal = 2500.0
 
-print('Run index:\t',Nrun)
-print('Temp:\t\t',Temp,'K')
+print('  Run index: ',Nrun)
+print('       Temp: ',Temp,'K')
+print('     Tfinal: ',Tfinal,'fs')
 
 chkDir = 'rrmd_NVE_poly_trans'
 if not os.path.exists(chkDir):
@@ -47,9 +58,9 @@ inpRec['restart'] = False
 inpRec['method'] = 'NVE'
 inpRec['N_per'] = 3
 inpRec['M'] = np.reshape(M,(M.size,))   # units = amu
-inpRec['Temp'] = 298.15                 # units = K
+inpRec['Temp'] = Temp                   # units = K
 inpRec['dt'] = 0.1                      # units = fs
-inpRec['Tfinal'] = 2500.0               # units = fs
+inpRec['Tfinal'] = Tfinal               # units = fs
 # need bounds since domains must be on same scale within the MD simulator
 inpRec['bounds'] = [[-180,180], [-180,180], [-180,180], [1.1, 2.5], [90, 270]]  # units = GIC
 inpRec['Gamma'] = 0.001                 # units = fs^(-1)
@@ -99,4 +110,4 @@ else:
 t = time.time()
 np.savetxt(os.path.join(chkDir, 'V0.txt'), V0, '%.15f')
 surfMD(Q0, P0, inpRec, chkDir, 50)
-print('Wall time:\t %.2f' % (time.time()-t),'sec\n')
+print('  Wall time:  %.2f' % (time.time()-t),'sec\n')
