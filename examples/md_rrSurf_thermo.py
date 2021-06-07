@@ -3,7 +3,6 @@ import numpy.matlib
 import os, sys
 sys.path.append('../src/')
 import Tasmanian as tsg    # must have Tasmanian in PYTHONPATH variable
-import pandas
 import time
 from rrmd_core import *
 
@@ -43,7 +42,7 @@ if not os.path.exists(chkDir):
 
 # read atomic masses
 state_folder = 'matfiles_iptotal_5_iptotal_8'
-M = pandas.read_csv('%s/atom.dat' % state_folder, sep='[A-z][a-z]?', header=None, engine='python').values[:,1]
+M = read_atom(state_folder)
 M = np.array([M]).T
 N_atom = len(M)
 M = np.reshape(np.matlib.repmat(M,1,3),(3*N_atom,1))
@@ -121,4 +120,4 @@ else:
 t = time.time()
 np.savetxt(os.path.join(chkDir, 'V0.txt'), V0, '%.15f')
 surfMD(Q0, P0, inpRec, chkDir, 500)
-print('  Wall time:   %.2f' % (time.time()-t),'sec\n')
+print('  Wall time:  %.2f' % (time.time()-t),'sec\n')

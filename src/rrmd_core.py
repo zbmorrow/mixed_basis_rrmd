@@ -1,6 +1,30 @@
 import numpy as np
 from rrmd_math_utils import *
 import os
+from collections import deque
+import re
+
+def read_atom(state_folder):
+    '''
+    M = read_atom(state_folder)
+
+    Reads atomic masses of molecule from atom.dat
+
+    Inputs:
+        state_folder:   (str) path to directory with atom.dat
+
+    Outputs:
+        M:              (length-N arraylike) atomic masses in amu
+    '''
+
+    fp = open('%s/atom.dat' % state_folder)
+    atomDat = deque(fp.read().splitlines())
+    fp.close()
+    M = []
+    while atomDat:
+        currLine = atomDat.popleft()
+        M.append(float(re.sub(r'[A-Z][a-z]?', '', currLine).strip()))
+    return np.asarray(M)
 
 def mass_metric(q, drdq, M):
     '''

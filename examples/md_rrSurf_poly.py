@@ -3,7 +3,6 @@ import numpy.matlib
 import os, sys
 sys.path.append('../src/')
 import Tasmanian as tsg    # must have Tasmanian in PYTHONPATH variable
-import pandas
 import time
 from rrmd_core import *
 import scipy.optimize
@@ -45,7 +44,7 @@ if not os.path.exists(chkDir):
 
 # read atomic masses
 state_folder = 'matfiles_allpoly_iptotal_12'
-M = pandas.read_csv('%s/atom.dat' % state_folder, sep='[A-z][a-z]?', header=None, engine='python').values[:,1]
+M = read_atom(state_folder)
 M = np.array([M]).T
 N_atom = len(M)
 M = np.reshape(np.matlib.repmat(M,1,3),(3*N_atom,1))
